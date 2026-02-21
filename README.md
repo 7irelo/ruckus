@@ -1,145 +1,148 @@
-# E-Commerce Web App API
+# ruckus
 
-## Overview
+`ruckus` is a safe-by-default Chaos Engineering CLI for **local Docker only**.
 
-Welcome to the **E-Commerce Web App API** project. This API provides the backend functionality for an e-commerce application, including user authentication, product management, order processing, and more. It is built using ASP.NET and SQL Server.
+It is intentionally conservative:
+- Dry-run planning is explicit via `plan`.
+- Real execution requires `run ... --apply --yes-i-understand`.
+- Targets must be allowlisted with `ruckus.enabled=true`.
+- Every experiment is time-bounded.
+- Revert steps always run at completion and on `Ctrl+C`.
 
-## Features
+## Scope (v1)
 
-- **User Authentication and Authorization**
-  - Sign Up, Login, and Logout
-  - Password Recovery
-  - Role-based Access Control
+- Supported runtime: local Docker engine on the current machine.
+- Not supported: remote SSH Docker hosts, Kubernetes.
+- Persistence: SQLite at `~/.ruckus/ruckus.db`.
 
-- **Product Management**
-  - Create, Read, Update, and Delete (CRUD) Products
-  - Product Categories
-  - Inventory Management
+## Safety Model
 
-- **Order Management**
-  - Create and Manage Orders
-  - Order Status Tracking
-  - Payment Processing
+- Default `--duration` is `30s`.
+- Default `--interval` is `10s`.
+- Hard duration cap is `5m`.
+- To exceed `5m`, pass `--unsafe-max-duration`.
+- Destructive execution gates:
+  - `--apply`
+  - `--yes-i-understand`
+- Allowlist requirement:
+  - Container must have label `ruckus.enabled=true`.
+- Structured logs:
+  - JSON logs by default to stdout.
+  - `--human` toggles human-readable output for command responses.
 
-- **User Management**
-  - User Profiles
-  - Address Book Management
-  - Order History
+## Install
 
-- **Search and Filter**
-  - Product Search
-  - Category and Price Filters
+Prerequisites:
+- Go 1.24+
+- Docker CLI + running local Docker daemon
 
-- **Notifications**
-  - Email Notifications for Order Confirmations and Updates
-
-## Prerequisites
-
-- **.NET 5.0+**
-- **SQL Server 2017+**
-- **Visual Studio 2019+**
-
-## Getting Started
-
-### Setting Up the Development Environment
-
-1. **Clone the Repository**:
-    ```bash
-    git clone https://github.com/7irelo/variate-asp-api.git
-    cd variate-asp-api
-    ```
-
-2. **Open the Solution**:
-    - Open `EcommerceApi.sln` in Visual Studio.
-
-3. **Configure SQL Server**:
-    - Create a new SQL Server database named `database_name`.
-    - Update the connection string in `appsettings.json` with your SQL Server credentials:
-    ```json
-    "ConnectionStrings": {
-        "DefaultConnection": "Server=your_server_name;Database=database_name;User Id=your_username;Password=your_password;"
-    }
-    ```
-
-4. **Apply Migrations**:
-    - Open the Package Manager Console in Visual Studio.
-    - Run the following commands:
-    ```bash
-    Update-Database
-    ```
-
-5. **Run the Application**:
-    - Press `F5` or click on the `Run` button in Visual Studio.
-
-### API Endpoints
-
-The following are the main API endpoints available:
-
-#### User Authentication
-- **POST /api/auth/register**: Register a new user
-- **POST /api/auth/login**: User login
-- **POST /api/auth/logout**: User logout
-- **POST /api/auth/forgot-password**: Password recovery
-
-#### Product Management
-- **GET /api/products**: Get all products
-- **GET /api/products/{id}**: Get a specific product by ID
-- **POST /api/products**: Create a new product
-- **PUT /api/products/{id}**: Update an existing product
-- **DELETE /api/products/{id}**: Delete a product
-
-#### Order Management
-- **GET /api/orders**: Get all orders
-- **GET /api/orders/{id}**: Get a specific order by ID
-- **POST /api/orders**: Create a new order
-- **PUT /api/orders/{id}**: Update an order
-- **DELETE /api/orders/{id}**: Cancel an order
-
-#### User Management
-- **GET /api/users/{id}**: Get user profile
-- **PUT /api/users/{id}**: Update user profile
-- **GET /api/users/{id}/orders**: Get user's order history
-
-### Testing the API
-
-Use tools like **Postman** or **curl** to test the API endpoints. For example, to register a new user:
+Build:
 
 ```bash
-POST /api/auth/register
-Content-Type: application/json
-
-{
-  "username": "johndoe",
-  "email": "johndoe@example.com",
-  "password": "Password123!"
-}
+go build -o ruckus ./cmd/ruckus
 ```
 
-## Contributing
+Run directly:
 
-We welcome contributions from the community. Please follow these steps to contribute:
+```bash
+go run ./cmd/ruckus --help
+```
 
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature-branch`).
-3. Make your changes.
-4. Commit your changes (`git commit -m 'Add some feature'`).
-5. Push to the branch (`git push origin feature-branch`).
-6. Open a pull request.
+## Experiments (v1)
 
-Ensure your code adheres to the project's coding standards and includes appropriate tests.
+### `kill-container`
+- Behavior: repeatedly runs `docker restart` on the target at `--interval` for `--duration`.
+- Revert: ensures a previously-running container is started again if needed.
 
-## Reporting Issues
+### `net-latency`
+- Behavior: applies `tc netem` delay/jitter in the target container namespace.
+- Revert: removes the applied qdisc at completion/stop/cancel.
+- Requirement: `tc` must exist in the target container.
+- If `tc` is unavailable, this experiment returns a clear unsupported error.
 
-If you encounter any issues, please report them on our [Issue Tracker](https://github.com/7irelo/asp.net-e-commerce-api/issues).
+### `cpu-stress`
+- Behavior: starts a stress sidecar (`progrium/stress` by default) using target network namespace mode.
+- Revert: force-removes the stress container.
+- Fallback: host-level stress fallback is disabled by default.
+- To enable host-level fallback, pass `--allow-host-stress`.
 
-## License
+## Commands
 
-This project is licensed under the [MIT License](LICENSE).
+### `ruckus targets`
+Lists allowlisted containers (`ruckus.enabled=true`).
 
-## Contact
+### `ruckus plan <experiment> [flags]`
+Shows exactly what would happen; no changes are made.
 
-For any queries or support, please contact us at tirelo.eric@gmail.com.
+### `ruckus run <experiment> --apply --yes-i-understand [flags]`
+Executes experiment with safety acknowledgements.
 
----
+### `ruckus stop <run-id>`
+Requests stop and triggers revert for active run.
 
-Thank you for using the E-Commerce Web App API. We hope it helps you build a robust and scalable e-commerce application!
+### `ruckus status`
+Shows active and previous runs from local history.
+
+## Examples
+
+```bash
+ruckus targets
+```
+
+```bash
+ruckus plan kill-container --target myapp --duration 30s
+```
+
+```bash
+ruckus run kill-container --target myapp --duration 30s --apply --yes-i-understand
+```
+
+```bash
+ruckus status
+```
+
+```bash
+ruckus stop <run-id>
+```
+
+## Label Allowlist
+
+Only labeled containers can be targeted.
+
+Example:
+
+```bash
+docker run -d --label ruckus.enabled=true --name myapp nginx:alpine
+```
+
+## Logging and History
+
+- Actions are logged with:
+  - `run_id`
+  - timestamp
+  - target
+  - experiment
+  - action/result
+- Run history and events are stored in `~/.ruckus/ruckus.db`.
+
+## Limitations
+
+- v1 does not support Kubernetes.
+- v1 does not support remote Docker hosts.
+- `net-latency` depends on `tc` availability and permissions inside target.
+- Host-level stress fallback can be dangerous and is disabled by default.
+
+## Ambiguous/Safe Defaults Chosen
+
+- Target selectors accept container name or ID accepted by `docker inspect`.
+- `net-latency` defaults:
+  - `--iface eth0`
+  - `--latency 100ms`
+  - `--jitter 20ms`
+- `cpu-stress` defaults:
+  - `--cpu-workers 1`
+  - `--stress-image progrium/stress`
+- Remote engine guard:
+  - `DOCKER_HOST` must be unset or local (`unix://` / `npipe://`).
+  - Any non-local `DOCKER_HOST` is rejected.
+
