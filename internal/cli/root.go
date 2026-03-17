@@ -56,6 +56,7 @@ func NewRootCommand() (*cobra.Command, error) {
 	rootCmd.AddCommand(newStopCommand(options))
 	rootCmd.AddCommand(newStatusCommand(options))
 	rootCmd.AddCommand(newTargetsCommand(options))
+	rootCmd.AddCommand(newHistoryCommand(options))
 
 	return rootCmd, nil
 }
