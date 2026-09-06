@@ -9,6 +9,10 @@ It is intentionally conservative:
 - Every experiment is time-bounded.
 - Revert steps always run at completion and on `Ctrl+C`.
 
+## Screenshots
+
+![ruckus CLI - help, targets, plan, run, status, history, logs, configuration and error handling](docs/screenshots/ruckus-cli.png)
+
 ## Scope (v1)
 
 - Supported runtime: local Docker engine on the current machine.
@@ -82,6 +86,30 @@ Requests stop and triggers revert for active run.
 
 ### `ruckus status`
 Shows active and previous runs from local history.
+
+### `ruckus history [--limit N]`
+Lists past experiment runs from the local history database.
+
+### `ruckus logs <run-id> [--follow]`
+Prints the recorded events for a run in chronological order. With `--follow`
+new events are streamed until the run reaches a terminal state or the command
+is interrupted.
+
+## Configuration
+
+Every setting below is optional and only changes a flag's *default* — an
+explicitly passed flag always wins. See `.env.example`.
+
+| Variable | Overrides | Default |
+|---|---|---|
+| `RUCKUS_DB_PATH` | `--db-path` | `~/.ruckus/ruckus.db` |
+| `RUCKUS_LOG_FORMAT` | `--human` (`json` \| `human`) | `json` |
+| `RUCKUS_DEFAULT_DURATION` | `--duration` | `30s` |
+| `RUCKUS_DEFAULT_INTERVAL` | `--interval` | `10s` |
+
+A leading `~` in `RUCKUS_DB_PATH` is expanded. An unparseable duration is
+reported as an error rather than silently ignored. The 5m hard safety cap still
+applies to `RUCKUS_DEFAULT_DURATION` unless `--unsafe-max-duration` is passed.
 
 ## Examples
 

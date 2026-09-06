@@ -14,6 +14,11 @@ import (
 	"ruckus/internal/store"
 )
 
+// Version is the ruckus release version. Override at build time with:
+//
+//	go build -ldflags "-X ruckus/internal/cli.Version=1.2.3"
+var Version = "0.1.0"
+
 type RootOptions struct {
 	Human  bool
 	DBPath string
@@ -36,19 +41,27 @@ func NewRootCommand() (*cobra.Command, error) {
 	if err != nil {
 		return nil, err
 	}
+	// RUCKUS_DB_PATH overrides the default location; --db-path still wins.
+	defaultDBPath = envString(EnvDBPath, defaultDBPath)
+
+	defaultHuman, err := envHumanOutput()
+	if err != nil {
+		return nil, err
+	}
 
 	options := &RootOptions{
-		Human:  false,
+		Human:  defaultHuman,
 		DBPath: defaultDBPath,
 	}
 
 	rootCmd := &cobra.Command{
-		Use:   "ruckus",
-		Short: "Ruckus is a safe-by-default local Docker chaos engineering CLI",
-		Long:  "Ruckus runs time-bounded and auto-reverting chaos experiments against allowlisted local Docker containers.",
+		Use:     "ruckus",
+		Short:   "Ruckus is a safe-by-default local Docker chaos engineering CLI",
+		Long:    "Ruckus runs time-bounded and auto-reverting chaos experiments against allowlisted local Docker containers.",
+		Version: Version,
 	}
 
-	rootCmd.PersistentFlags().BoolVar(&options.Human, "human", false, "render human-friendly output")
+	rootCmd.PersistentFlags().BoolVar(&options.Human, "human", defaultHuman, "render human-friendly output")
 	rootCmd.PersistentFlags().StringVar(&options.DBPath, "db-path", defaultDBPath, "path to sqlite run history database")
 
 	rootCmd.AddCommand(newPlanCommand(options))
@@ -57,6 +70,7 @@ func NewRootCommand() (*cobra.Command, error) {
 	rootCmd.AddCommand(newStatusCommand(options))
 	rootCmd.AddCommand(newTargetsCommand(options))
 	rootCmd.AddCommand(newHistoryCommand(options))
+	rootCmd.AddCommand(newLogsCommand(options))
 
 	return rootCmd, nil
 }

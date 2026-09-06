@@ -16,6 +16,9 @@ func newPlanCommand(rootOptions *RootOptions) *cobra.Command {
 		Short: "Print what an experiment would do without making changes",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if flags.envErr != nil {
+				return flags.envErr
+			}
 			return mustRunWithDeps(cmd, rootOptions, true, func(ctx context.Context, _ *cobra.Command, commandDeps deps) error {
 				experiment := args[0]
 				options := flags.toRunOptions(experiment)

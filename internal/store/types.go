@@ -8,6 +8,7 @@ import (
 
 const (
 	DefaultStatusLimit = 50
+	DefaultEventLimit  = 500
 )
 
 var (
@@ -62,4 +63,9 @@ type Store interface {
 	GetRun(ctx context.Context, runID string) (RunRecord, error)
 	ListRuns(ctx context.Context, limit int) ([]RunRecord, error)
 	AddEvent(ctx context.Context, event EventRecord) error
+	// ListEvents returns a run's events in chronological order. Only events
+	// strictly newer than afterNS are returned, so a follower can poll by
+	// passing back the timestamp of the last event it saw. Pass 0 for the
+	// full history.
+	ListEvents(ctx context.Context, runID string, afterNS int64, limit int) ([]EventRecord, error)
 }

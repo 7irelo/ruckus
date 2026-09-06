@@ -306,6 +306,65 @@ func (s *SQLiteStore) AddEvent(ctx context.Context, event EventRecord) error {
 	return nil
 }
 
+func (s *SQLiteStore) ListEvents(ctx context.Context, runID string, afterNS int64, limit int) ([]EventRecord, error) {
+	if limit <= 0 {
+		limit = DefaultEventLimit
+	}
+
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT run_id, ts_ns, level, action, result, target, message, details_json
+		FROM events
+		WHERE run_id = ? AND ts_ns > ?
+		ORDER BY ts_ns ASC, id ASC
+		LIMIT ?;`,
+		runID,
+		afterNS,
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list events for run %q: %w", runID, err)
+	}
+	defer rows.Close()
+
+	events := make([]EventRecord, 0, limit)
+	for rows.Next() {
+		var (
+			event       EventRecord
+			tsNS        int64
+			detailsJSON string
+		)
+
+		if scanErr := rows.Scan(
+			&event.RunID,
+			&tsNS,
+			&event.Level,
+			&event.Action,
+			&event.Result,
+			&event.Target,
+			&event.Message,
+			&detailsJSON,
+		); scanErr != nil {
+			return nil, fmt.Errorf("scan event for run %q: %w", runID, scanErr)
+		}
+
+		details, detailsErr := unmarshalMetadata(detailsJSON)
+		if detailsErr != nil {
+			return nil, fmt.Errorf("decode event details for run %q: %w", runID, detailsErr)
+		}
+
+		event.Time = time.Unix(0, tsNS).UTC()
+		event.Details = details
+		events = append(events, event)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate events for run %q: %w", runID, err)
+	}
+
+	return events, nil
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }
